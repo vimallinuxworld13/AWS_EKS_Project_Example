@@ -83,4 +83,6 @@ Add IAM ec2admin policy
 
 
 
+https://github.com/eksctl-io/eksctl/blob/main/examples/01-simple-cluster.yaml
+
 
