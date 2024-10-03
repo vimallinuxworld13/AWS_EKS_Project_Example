@@ -83,6 +83,16 @@ Add IAM ec2admin policy
 
 
 
+
+https://joachim8675309.medium.com/eks-ebs-storage-with-eksctl-3e526f534215
+https://repost.aws/knowledge-center/eks-api-server-unauthorized-error
+https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html
+https://docs.fuga.cloud/cloud/extra/install-wordpress-in-k8s-with-bitnami-helm/#installing-the-wordpress-chart
+
+
+
+
+
 https://github.com/eksctl-io/eksctl/blob/main/examples/01-simple-cluster.yaml
 
 
