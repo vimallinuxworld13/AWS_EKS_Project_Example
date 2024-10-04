@@ -1,0 +1,172 @@
+Kube Dashboard:
+
+https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/
+https://github.com/kubernetes/dashboard/blob/master/docs/user/access-control/creating-sample-user.md
+
+
+kubectl create namespace lwns1
+kubectl get all -n lwns1
+
+kubectl create deploy nginx --image=nginx -n lwns1
+
+aws  sts get-caller-identity
+
+
+
+aws iam create-user --user-name vimal
+aws iam create-access-key --user-name vimal | tee vimal_key.json
+
+cat << EoF > vimaluser_creds.sh
+export AWS_SECRET_ACCESS_KEY=$(jq -r .AccessKey.SecretAccessKey vimal_key.json)
+export AWS_ACCESS_KEY_ID=$(jq -r .AccessKey.AccessKeyId vimal_key.json)
+EoF
+
+cat aws-auth.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-auth
+  namespace: kube-system
+data:
+  mapUsers: |
+    - userarn: arn:aws:iam::123456789:user/vimal
+      username: vimal
+	  
+kubectl apply -f aws-auth.yaml
+
+
+
+kubectl get configmap -n kube-system aws-auth -o yaml 
+
+
+. rbacuser_creds.sh
+
+aws sts get-caller-identity
+
+aws eks describe-cluster --name lw-cluster-1 --query cluster.identity.oidc.issuer --output text
+
+kubectl get pods -n rbac-test
+
+
+cat << EoF > vimal-role.yaml
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: lwns1
+  name: lw-manager
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["pods"]
+  verbs: ["list","get","watch"]
+- apiGroups: ["extensions","apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch"]
+EoF
+
+
+cat << EoF > vimal-role-binding.yaml
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: lw-read-pods
+  namespace: lwns1
+subjects:
+- kind: User
+  name: vimal
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: lw-manager
+  apiGroup: rbac.authorization.k8s.io
+EoF
+
+
+kubectl apply -f rbacuser-role.yaml
+kubectl apply -f rbacuser-role-binding.yaml
+
+
+
+
+
+# add prometheus Helm repo
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+
+# add grafana Helm repo
+helm repo add grafana https://grafana.github.io/helm-charts
+
+
+kubectl create namespace prometheus
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+
+helm install prometheus prometheus-community/prometheus \
+    --namespace prometheus \
+    --set alertmanager.persistentVolume.storageClass="gp2" \
+    --set server.persistentVolume.storageClass="gp2"
+
+
+eksctl utils associate-iam-oidc-provider --region=us-east-1 --cluster=lw-cluster-111 --approve
+
+ aws eks describe-cluster --name lw-cluster-111 --query cluster.identity.oidc.issuer --output text
+ 
+eksctl create iamserviceaccount         --name ebs-csi-controller-sa         --namespace kube-system         --cluster lw-cluster-111         --role-name AmazonEKS_EBS_CSI_DriverRole         --role-only         --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy         --approve
+
+aws iam get-role --role-name AmazonEKS_EBS_CSI_DriverRole
+aws eks describe-cluster --name lw-cluster-111 --query cluster.identity.oidc.issuer --output text
+
+
+kubectl port-forward -n prometheus deploy/prometheus-server 8080:9090
+
+
+aws eks describe-addon-versions --addon-name aws-ebs-csi-driver
+
+eksctl create addon --name aws-ebs-csi-driver --cluster lw-cluster-111 \
+    --service-account-role-arn $SERVICE_ACCOUNT_ROLE_ARN --force
+
+
+export SERVICE_ACCOUNT_ROLE_ARN=$(aws iam get-role --role-name AmazonEKS_EBS_CSI_DriverRole | jq -r '.Role.Arn')
+
+eksctl create addon --name aws-ebs-csi-driver --cluster lw-cluster-111     --service-account-role-arn $SERVICE_ACCOUNT_ROLE_ARN --force
+
+
+
+cat << EoF > grafana.yaml
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      url: http://prometheus-server.prometheus.svc.cluster.local
+      access: proxy
+      isDefault: true
+EoF
+
+
+kubectl create namespace grafana
+
+helm install grafana grafana/grafana \
+    --namespace grafana \
+    --set persistence.storageClassName="ebs-gp3" \
+    --set persistence.enabled=true \
+    --set adminPassword='EKS!sAWSome' \
+    --values grafana.yaml \
+    --set service.type=LoadBalancer
+
+
+kubectl get all -n grafana
+
+
+export ELB=$(kubectl get svc -n grafana grafana -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+echo "http://$ELB"
+
+
+kubectl get secret --namespace grafana grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+
+3119 dashboard id under Grafana.com Dashboard.
+
+Enter 6417 dashboard id under Grafana.com Dashboard.
+
+
+	
